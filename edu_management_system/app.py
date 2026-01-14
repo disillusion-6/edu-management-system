@@ -48,7 +48,7 @@ def get_db_connection():
     conn = pymysql.connect(
         host='localhost',
         user='root',        
-        password='MySQL*6460618',  # 替换为你的MySQL密码
+        password='',  # 替换为你的MySQL密码
         database='educational_management_system',
         port=3306,
         cursorclass=pymysql.cursors.DictCursor
@@ -994,4 +994,5 @@ def delete_course_arrangement(arrangement_id):
 if __name__ == '__main__':
     print("🚀 教学管理系统启动中...")
     print("🔗 访问地址：http://127.0.0.1:5000")
+
     app.run(debug=True, host='127.0.0.1', port=5000)
