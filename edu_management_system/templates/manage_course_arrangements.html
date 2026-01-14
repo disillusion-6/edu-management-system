@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>{% if role == 'student' %}我的课表{% elif role == 'teacher' %}我的排课{% else %}课程安排管理{% endif %}</title>
+    <style>
+        /* 全局样式 */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: "Microsoft YaHei", sans-serif; background-color: #f5f5f5; }
+        .container { width: 90%; margin: 20px auto; }
+        
+        /* 页面头部 */
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        .page-header h2 { color: #333; }
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            color: white;
+            cursor: pointer;
+            margin: 0 5px;
+        }
+        .btn-back { background-color: #ffc107; color: #333; }
+        .btn-add { background-color: #28a745; }
+        .btn-search { background-color: #007bff; }
+        .btn-reset { background-color: #6c757d; }
+        .btn-delete { background-color: #dc3545; }
+        
+        /* 筛选区域（仅管理员/教师显示） */
+        .search-section {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .form-item { margin: 10px 0; }
+        label { display: inline-block; width: 80px; text-align: right; margin-right: 10px; }
+        input, select { padding: 6px; width: 200px; border: 1px solid #ddd; border-radius: 4px; }
+        
+        /* 列表区域 */
+        .list-section {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .list-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: center; }
+        th { background-color: #f8f9fa; }
+        .course-row { cursor: pointer; }
+        .course-row:hover { background-color: #f5f5f5; }
+        
+        /* 弹窗样式（仅管理员显示） */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            z-index: 1000;
+        }
+        .modal-content {
+            background-color: white;
+            width: 700px;
+            margin: 100px auto;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        .modal-footer {
+            text-align: right;
+            margin-top: 20px;
+            padding-top: 10px;
+            border-top: 1px solid #eee;
+        }
+        .close-btn { font-size: 20px; cursor: pointer; color: #666; }
+        
+        /* 详情弹窗 */
+        .detail-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            z-index: 1001;
+        }
+        .detail-modal-content {
+            background-color: white;
+            width: 500px;
+            margin: 100px auto;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        }
+        .course-detail-item {
+            margin: 10px 0;
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 0;
+            border-bottom: 1px dashed #eee;
+        }
+        .detail-label { font-weight: bold; color: #333; }
+        
+        /* 隐藏元素 */
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 页面头部：不同角色显示不同标题 -->
+        <div class="page-header">
+            <h2>{% if role == 'student' %}我的课表{% elif role == 'teacher' %}我的排课{% else %}课程安排管理{% endif %}</h2>
+            <button class="btn btn-back" onclick="goBack()">返回主页面</button>
+        </div>
+
+        <!-- 筛选区域：仅管理员/教师显示 -->
+        <div class="search-section {% if role == 'student' %}hidden{% endif %}">
+            <h3>{% if role == 'teacher' %}查询我的排课{% else %}查询课程安排{% endif %}</h3>
+            <div class="form-item">
+                <label>课程ID：</label><input type="text" id="search_course_id" placeholder="模糊查询">
+                <!-- 仅管理员显示教师ID筛选 -->
+                {% if role == 'admin' %}
+                <label>教师ID：</label><input type="text" id="search_teacher_id" placeholder="模糊查询">
+                {% endif %}
+                <label>学期：</label><input type="text" id="search_semester" placeholder="如：2026-2027-1">
+                <button class="btn btn-search" onclick="getCourseArrangements()">查询</button>
+                <button class="btn btn-reset" onclick="resetSearch()">重置</button>
+            </div>
+        </div>
+
+        <!-- 列表区域：不同角色显示不同操作 -->
+        <div class="list-section">
+            <div class="list-header">
+                <h3>{% if role == 'student' %}我的课表列表{% elif role == 'teacher' %}我的排课列表{% else %}课程安排列表{% endif %}</h3>
+                <!-- 仅管理员显示新增按钮 -->
+                <button class="btn btn-add {% if role != 'admin' %}hidden{% endif %}" id="add-btn" onclick="openAddModal()">新增课程安排</button>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>排课ID</th>
+                        <th>课程名称</th>
+                        <th>教师姓名</th>
+                        {% if role == 'admin' %}<th>班级名称</th>{% endif %}
+                        <th>学期</th>
+                        <th>周次</th>
+                        <th>星期</th>
+                        <th>节次</th>
+                        <th>教室</th>
+                        <!-- 仅管理员显示操作列 -->
+                        {% if role == 'admin' %}<th>操作</th>{% endif %}
+                    </tr>
+                </thead>
+                <tbody id="course_arrangement_list"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 新增弹窗：仅管理员显示 -->
+    <div class="modal {% if role != 'admin' %}hidden{% endif %}" id="addModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>新增课程安排</h3>
+                <span class="close-btn" onclick="closeAddModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="form-item">
+                    <label>课程ID：</label><select id="modal_course_id"></select>
+                    <label>教师ID：</label><select id="modal_teacher_id"></select>
+                    <label>班级ID：</label><select id="modal_class_id"></select>
+                </div>
+                <div class="form-item">
+                    <label>学期：</label><input type="text" id="modal_semester" placeholder="如：2026-2027-1">
+                    <label>周次：</label><input type="text" id="modal_week" placeholder="如：1-18周">
+                    <label>星期：</label>
+                    <select id="modal_day">
+                        <option value="1">周一</option>
+                        <option value="2">周二</option>
+                        <option value="3">周三</option>
+                        <option value="4">周四</option>
+                        <option value="5">周五</option>
+                        <option value="6">周六</option>
+                        <option value="7">周日</option>
+                    </select>
+                </div>
+                <div class="form-item">
+                    <label>节次：</label><input type="text" id="modal_period" placeholder="如：1-2节">
+                    <label>教室：</label><input type="text" id="modal_classroom" placeholder="如：1号教学楼301室">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-add" onclick="submitAddCourseArrangement()">确认添加</button>
+                <button class="btn btn-reset" onclick="closeAddModal()">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 详情弹窗：所有角色都显示 -->
+    <div class="detail-modal" id="detailModal">
+        <div class="detail-modal-content">
+            <div class="modal-header">
+                <h3>{% if role == 'student' %}课程详情{% elif role == 'teacher' %}排课详情{% else %}课程安排详情{% endif %}</h3>
+                <span class="close-btn" onclick="closeDetailModal()">&times;</span>
+            </div>
+            <div id="courseDetailContent"></div>
+            <div class="modal-footer">
+                <button class="btn btn-reset" onclick="closeDetailModal()">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.bootcdn.net/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+    <script>
+        // 全局变量：从模板获取
+        const currentRole = "{{ role }}";
+        const currentUsername = "{{ username }}";
+        const studentClassId = "{{ student_class_id }}";
+
+        // 页面加载初始化
+        $(function() {
+            // 仅管理员加载下拉列表
+            if (currentRole === 'admin') {
+                loadCourses();
+                loadTeachers();
+                loadClasses();
+            }
+            // 自动查询数据
+            getCourseArrangements();
+        });
+
+        // 返回主页面
+        function goBack() {
+            window.location.href = '/';
+        }
+
+        // 加载下拉列表（仅管理员）
+        function loadCourses() {
+            $.ajax({
+                url: '/api/courses',
+                type: 'GET',
+                success: function(res) {
+                    if (res.success) {
+                        let html = '';
+                        res.data.forEach(item => {
+                            html += `<option value="${item.course_id}">${item.course_id} - ${item.course_name}</option>`;
+                        });
+                        $('#modal_course_id').html(html);
+                    }
+                }
+            });
+        }
+        function loadTeachers() {
+            $.ajax({
+                url: '/api/teachers',
+                type: 'GET',
+                success: function(res) {
+                    if (res.success) {
+                        let html = '';
+                        res.data.forEach(item => {
+                            html += `<option value="${item.teacher_id}">${item.teacher_id} - ${item.teacher_name}</option>`;
+                        });
+                        $('#modal_teacher_id').html(html);
+                    }
+                }
+            });
+        }
+        function loadClasses() {
+            $.ajax({
+                url: '/api/classes',
+                type: 'GET',
+                success: function(res) {
+                    if (res.success) {
+                        let html = '';
+                        res.data.forEach(item => {
+                            html += `<option value="${item.class_id}">${item.class_id} - ${item.class_name}</option>`;
+                        });
+                        $('#modal_class_id').html(html);
+                    }
+                }
+            });
+        }
+
+        // 打开/关闭新增弹窗（仅管理员）
+        function openAddModal() {
+            $('#modal_semester, #modal_week, #modal_period, #modal_classroom').val('');
+            $('#addModal').css('display', 'block');
+        }
+        function closeAddModal() {
+            $('#addModal').css('display', 'none');
+        }
+
+        // 提交新增课程安排（仅管理员）
+        function submitAddCourseArrangement() {
+            const data = {
+                course_id: $('#modal_course_id').val(),
+                teacher_id: $('#modal_teacher_id').val(),
+                class_id: $('#modal_class_id').val(),
+                semester: $('#modal_semester').val(),
+                week: $('#modal_week').val(),
+                day: $('#modal_day').val(),
+                period: $('#modal_period').val(),
+                classroom: $('#modal_classroom').val()
+            };
+            $.ajax({
+                url: '/api/course_arrangements',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(data),
+                success: function(res) {
+                    alert(res.message);
+                    if (res.success) {
+                        closeAddModal();
+                        getCourseArrangements();
+                    }
+                }
+            });
+        }
+
+        // 查询课程安排（核心：不同角色自动筛选）
+        function getCourseArrangements() {
+            const params = {
+                course_id: $('#search_course_id').val(),
+                semester: $('#search_semester').val()
+            };
+            // 管理员额外筛选教师ID
+            if (currentRole === 'admin') {
+                params.teacher_id = $('#search_teacher_id').val();
+            }
+
+            $.ajax({
+                url: '/api/course_arrangements',
+                type: 'GET',
+                data: params,
+                success: function(res) {
+                    if (res.success) {
+                        let html = '';
+                        if (res.data.length === 0) {
+                            // 适配列数：管理员10列，教师8列，学生8列
+                            const colCount = currentRole === 'admin' ? 10 : 8;
+                            html = `<tr><td colspan="${colCount}">暂无数据</td></tr>`;
+                        } else {
+                            res.data.forEach(item => {
+                                // 星期数字转文字
+                                const dayMap = {1:'周一',2:'周二',3:'周三',4:'周四',5:'周五',6:'周六',7:'周日'};
+                                const dayText = dayMap[item.day] || item.day;
+                                
+                                // 操作列（仅管理员）
+                                const operateBtn = currentRole === 'admin' 
+                                    ? `<td><button class="btn btn-delete" onclick="deleteCourseArrangement(${item.arrangement_id})">删除</button></td>` 
+                                    : '';
+                                
+                                // 班级列（仅管理员显示）
+                                const classCol = currentRole === 'admin' 
+                                    ? `<td>${item.class_name || item.class_id}</td>` 
+                                    : '';
+
+                                // 渲染行
+                                html += `
+                                    <tr class="course-row" onclick="showCourseDetail(this)" data-course='${JSON.stringify(item)}'>
+                                        <td>${item.arrangement_id}</td>
+                                        <td>${item.course_name || item.course_id}</td>
+                                        <td>${item.teacher_name || item.teacher_id}</td>
+                                        ${classCol}
+                                        <td>${item.semester}</td>
+                                        <td>${item.week}</td>
+                                        <td>${dayText}</td>
+                                        <td>${item.period}</td>
+                                        <td>${item.classroom || '-'}</td>
+                                        ${operateBtn}
+                                    </tr>
+                                `;
+                            });
+                        }
+                        $('#course_arrangement_list').html(html);
+                    } else {
+                        alert(res.message);
+                    }
+                }
+            });
+        }
+
+        // 显示/关闭详情弹窗
+        function showCourseDetail(row) {
+            if (event.target.tagName === 'BUTTON') return;
+            const courseData = JSON.parse($(row).attr('data-course'));
+            const dayMap = {1:'周一',2:'周二',3:'周三',4:'周四',5:'周五',6:'周六',7:'周日'};
+            
+            let detailHtml = `
+                <div class="course-detail-item">
+                    <span class="detail-label">课程编号：</span>
+                    <span>${courseData.course_id}</span>
+                </div>
+                <div class="course-detail-item">
+                    <span class="detail-label">课程名称：</span>
+                    <span>${courseData.course_name || '未设置'}</span>
+                </div>
+                <div class="course-detail-item">
+                    <span class="detail-label">学分：</span>
+                    <span>${courseData.credit || '未设置'}</span>
+                </div>
+                <div class="course-detail-item">
+                    <span class="detail-label">总课时：</span>
+                    <span>${courseData.hours || '未设置'}课时</span>
+                </div>
+                <div class="course-detail-item">
+                    <span class="detail-label">课程类型：</span>
+                    <span>${courseData.type || '未设置'}</span>
+                </div>
+                <div class="course-detail-item">
+                    <span class="detail-label">授课教师：</span>
+                    <span>${courseData.teacher_name || courseData.teacher_id}</span>
+                </div>
+                ${currentRole === 'admin' ? `
+                <div class="course-detail-item">
+                    <span class="detail-label">授课班级：</span>
+                    <span>${courseData.class_name || courseData.class_id}</span>
+                </div>
+                ` : ''}
+                <div class="course-detail-item">
+                    <span class="detail-label">学期：</span>
+                    <span>${courseData.semester}</span>
+                </div>
+                <div class="course-detail-item">
+                    <span class="detail-label">上课时间：</span>
+                    <span>${courseData.week} ${dayMap[courseData.day]} 第${courseData.period}节</span>
+                </div>
+                <div class="course-detail-item">
+                    <span class="detail-label">上课教室：</span>
+                    <span>${courseData.classroom || '未指定'}</span>
+                </div>
+            `;
+            $('#courseDetailContent').html(detailHtml);
+            $('#detailModal').css('display', 'block');
+        }
+        function closeDetailModal() {
+            $('#detailModal').css('display', 'none');
+        }
+
+        // 删除课程安排（仅管理员）
+        function deleteCourseArrangement(arrangement_id) {
+            if (!confirm(`确定删除排课ID${arrangement_id}的记录？删除后无法恢复！`)) return;
+            $.ajax({
+                url: `/api/course_arrangements/${arrangement_id}`,
+                type: 'DELETE',
+                success: function(res) {
+                    alert(res.message);
+                    if (res.success) getCourseArrangements();
+                }
+            });
+        }
+
+        // 重置筛选（仅管理员/教师）
+        function resetSearch() {
+            $('#search_course_id, #search_semester').val('');
+            if (currentRole === 'admin') $('#search_teacher_id').val('');
+            getCourseArrangements();
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>教师管理 - 增删查一体</title>
+    <style>
+        .container { width: 90%; margin: 20px auto; }
+        .section { margin-bottom: 20px; padding: 15px; border: 1px solid #eee; border-radius: 6px; }
+        .form-item { margin: 10px 0; }
+        label { display: inline-block; width: 80px; text-align: right; margin-right: 10px; }
+        input, select { padding: 6px; width: 200px; }
+        .btn { padding: 8px 16px; border: none; border-radius: 4px; color: white; cursor: pointer; margin: 0 5px; }
+        .btn-add { background-color: #28a745; }
+        .btn-search { background-color: #007bff; }
+        .btn-reset { background-color: #6c757d; }
+        .btn-delete { background-color: #dc3545; }
+        .btn-back { background-color: #ffc107; color: #333; } /* 返回按钮样式 */
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: center; }
+        th { background-color: #f8f9fa; }
+        /* 列表标题栏样式 */
+        .list-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .list-header h3 { margin: 0; }
+        /* 页面头部（标题+返回按钮） */
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .page-header h2 { margin: 0; }
+        /* 弹窗样式 */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            z-index: 1000;
+        }
+        .modal-content {
+            background-color: white;
+            width: 500px;
+            margin: 100px auto;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        .modal-header h3 { margin: 0; }
+        .close-btn {
+            font-size: 20px;
+            cursor: pointer;
+            color: #666;
+        }
+        .modal-footer {
+            text-align: right;
+            margin-top: 20px;
+            padding-top: 10px;
+            border-top: 1px solid #eee;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 页面头部：标题 + 返回按钮 -->
+        <div class="page-header">
+            <h2>教师管理</h2>
+            <button class="btn btn-back" onclick="goBack()">返回主页面</button>
+        </div>
+
+        <!-- 查询教师 -->
+        <div class="section">
+            <h3>查询教师</h3>
+            <div class="form-item">
+                <label>工号：</label><input type="text" id="search_teacher_id" placeholder="模糊查询">
+                <label>姓名：</label><input type="text" id="search_teacher_name" placeholder="模糊查询">
+                <label>院系ID：</label><input type="number" id="search_dept_id" placeholder="精确查询">
+                <button class="btn btn-search" onclick="getTeachers()">查询</button>
+                <button class="btn btn-reset" onclick="resetSearch()">重置</button>
+            </div>
+        </div>
+
+        <!-- 教师列表 -->
+        <div class="section">
+            <div class="list-header">
+                <h3>教师列表</h3>
+                <button class="btn btn-add" onclick="openAddModal()">新增教师</button>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>教师工号</th>
+                        <th>姓名</th>
+                        <th>性别</th>
+                        <th>所属院系</th>
+                        <th>职称</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="teacher_list"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 新增教师弹窗 -->
+    <div class="modal" id="addModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>新增教师</h3>
+                <span class="close-btn" onclick="closeAddModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="form-item">
+                    <label>教师工号：</label><input type="text" id="modal_teacher_id" placeholder="如：T2026001">
+                    <label>姓名：</label><input type="text" id="modal_teacher_name" placeholder="如：李四">
+                    <label>性别：</label>
+                    <select id="modal_gender">
+                        <option value="男">男</option>
+                        <option value="女">女</option>
+                    </select>
+                </div>
+                <div class="form-item">
+                    <label>院系ID：</label><input type="number" id="modal_dept_id" placeholder="如：1">
+                    <label>职称：</label><input type="text" id="modal_title" placeholder="如：教授、讲师">
+                    <label>电话：</label><input type="text" id="modal_phone" placeholder="11位手机号">
+                </div>
+                <div class="form-item">
+                    <label>邮箱：</label><input type="email" id="modal_email" placeholder="xxx@xxx.com">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-add" onclick="submitAddTeacher()">确认添加</button>
+                <button class="btn btn-reset" onclick="closeAddModal()">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.bootcdn.net/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+    <script>
+        $(function() { getTeachers(); });
+
+        // 返回主页面
+        function goBack() {
+            window.location.href = '/'; // 跳转到总入口页面
+        }
+
+        // 弹窗操作
+        function openAddModal() {
+            $('#modal_teacher_id').val('');
+            $('#modal_teacher_name').val('');
+            $('#modal_dept_id').val('');
+            $('#modal_title').val('');
+            $('#modal_phone').val('');
+            $('#modal_email').val('');
+            $('#addModal').css('display', 'block');
+        }
+        function closeAddModal() {
+            $('#addModal').css('display', 'none');
+        }
+
+        // 新增教师
+        function submitAddTeacher() {
+            const data = {
+                teacher_id: $('#modal_teacher_id').val(),
+                teacher_name: $('#modal_teacher_name').val(),
+                gender: $('#modal_gender').val(),
+                dept_id: $('#modal_dept_id').val(),
+                title: $('#modal_title').val(),
+                phone: $('#modal_phone').val(),
+                email: $('#modal_email').val()
+            };
+            $.ajax({
+                url: '/api/teachers',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(data),
+                success: function(res) {
+                    alert(res.message);
+                    if (res.success) {
+                        closeAddModal();
+                        getTeachers();
+                    }
+                }
+            });
+        }
+
+        // 查询教师
+        function getTeachers() {
+            const params = {
+                teacher_id: $('#search_teacher_id').val(),
+                teacher_name: $('#search_teacher_name').val(),
+                dept_id: $('#search_dept_id').val()
+            };
+            $.ajax({
+                url: '/api/teachers',
+                type: 'GET',
+                data: params,
+                success: function(res) {
+                    if (res.success) {
+                        let html = '';
+                        if (res.data.length === 0) {
+                            html = '<tr><td colspan="6">暂无教师数据</td></tr>';
+                        } else {
+                            res.data.forEach(item => {
+                                html += `
+                                    <tr>
+                                        <td>${item.teacher_id}</td>
+                                        <td>${item.teacher_name}</td>
+                                        <td>${item.gender}</td>
+                                        <td>${item.dept_name || '未知院系'}</td>
+                                        <td>${item.title || '无'}</td>
+                                        <td><button class="btn btn-delete" onclick="deleteTeacher('${item.teacher_id}')">删除</button></td>
+                                    </tr>
+                                `;
+                            });
+                        }
+                        $('#teacher_list').html(html);
+                    } else {
+                        alert(res.message);
+                    }
+                }
+            });
+        }
+
+        // 删除教师
+        function deleteTeacher(teacher_id) {
+            if (!confirm(`确定删除工号${teacher_id}的教师？关联排课/用户将一并删除！`)) return;
+            $.ajax({
+                url: `/api/teachers/${teacher_id}`,
+                type: 'DELETE',
+                success: function(res) {
+                    alert(res.message);
+                    if (res.success) getTeachers();
+                }
+            });
+        }
+
+        // 重置筛选
+        function resetSearch() {
+            $('#search_teacher_id').val('');
+            $('#search_teacher_name').val('');
+            $('#search_dept_id').val('');
+            getTeachers();
+        }
+    </script>
+</body>
+</html>
